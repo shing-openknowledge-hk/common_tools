@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PDF to PNG (Browser)</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui}
+body{max-width:1200px;margin:20px auto;padding:0 16px}
+#fileInput{margin:10px 0}
+.controls{margin:12px 0}
+button{padding:8px 16px;cursor:pointer}
+#preview{display:grid;grid-template-columns:repeat(auto-fill, 220px);gap:16px;margin-top:20px}
+.preview-item{border:1px solid #ccc;padding:8px}
+.preview-item img{max-width:100%;height:auto}
+.loading{color:#2563eb}
+</style>
+<!-- CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+<h2>PDF to PNG Converter (Client Side)</h2>
+
+<div class="controls">
+  <input type="file" id="fileInput" accept=".pdf" />
+  <br>
+  Scale (清晰度):
+  <input type="number" id="scale" value="2" min="0.5" max="5" step="0.5">
+  <button id="convertBtn">Convert PDF To PNG</button>
+  <button id="downloadAllBtn" disabled>Download All (ZIP Package)</button>
+</div>
+
+<div id="status"></div>
+<div id="preview"></div>
+
+<script>
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+const fileInput = document.getElementById('fileInput');
+const convertBtn = document.getElementById('convertBtn');
+const downloadAllBtn = document.getElementById('downloadAllBtn');
+const scaleInput = document.getElementById('scale');
+const statusEl = document.getElementById('status');
+const previewEl = document.getElementById('preview');
+
+let pngBlobList = []; // 儲存 {page: number, blob: Blob}
+
+convertBtn.addEventListener('click', async ()=>{
+  const file = fileInput.files[0];
+  if(!file){
+    statusEl.textContent = 'Please select a PDF file first';
+    return;
+  }
+  const scale = parseFloat(scaleInput.value);
+  statusEl.textContent = 'Loading PDF...';
+  previewEl.innerHTML = '';
+  pngBlobList = [];
+  downloadAllBtn.disabled = true;
+
+  try{
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+    const total = pdfDoc.numPages;
+    statusEl.textContent = `Total pages: ${total}, rendering...`;
+
+    for(let i=1; i<=total; i++){
+      statusEl.textContent = `Rendering page ${i}/${total}`;
+      const page = await pdfDoc.getPage(i);
+      const viewport = page.getViewport({scale});
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({canvasContext: ctx, viewport}).promise;
+
+      const blob = await new Promise(res=>canvas.toBlob(res, 'image/png'));
+      pngBlobList.push({page:i, blob});
+
+      const blobUrl = URL.createObjectURL(blob);
+      const wrap = document.createElement('div');
+      wrap.className = 'preview-item';
+      wrap.innerHTML = `
+        <p>Page ${i}</p>
+        <img src="${blobUrl}" style="max-height:280px">
+      `;
+      previewEl.appendChild(wrap);
+    }
+
+    statusEl.textContent = 'Render complete!';
+    downloadAllBtn.disabled = false;
+  }catch(err){
+    statusEl.textContent = 'Error: ' + err.message;
+    console.error(err);
+  }
+});
+
+// 打包ZIP下載
+downloadAllBtn.addEventListener('click', async ()=>{
+  if(!pngBlobList.length) return;
+  statusEl.textContent = 'Packaging ZIP file...';
+  const zip = new JSZip();
+
+  for(const item of pngBlobList){
+    zip.file(`page_${item.page}.png`, item.blob);
+  }
+  const zipBlob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = `pdf_pages.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+  statusEl.textContent = 'ZIP downloaded!';
+});
+</script>
+</body>
+</html>
