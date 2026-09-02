@@ -1,6 +1,111 @@
-tools
-<a href="whiteboard/index.html">📝 whiteboard</a>
-<a href="pdf-to-image/index.html">pdf-to-image</a>
-<a href="password_generator/index.html">🔑 Generator</a>
-<a href="ollama/index.html">🦙 Ollama</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quick Launcher</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui, -apple-system, sans-serif}
+body{
+  background:#1a1a1a;color:#eee;height:100vh;
+  display:flex;align-items:center;justify-content:center;
+}
+.wrapper{
+  width:min(720px,92vw);
+  background:#282828;border-radius:10px;
+  box-shadow:0 10px 40px #0008;overflow:hidden;
+}
+.input-bar{
+  width:100%;padding:16px 20px;font-size:18px;
+  border:none;background:#333;color:#fff;outline:none;
+}
+.input-bar::placeholder{color:#aaa}
+.results{
+  max-height:420px;overflow-y:auto;
+}
+.item{
+  padding:12px 20px;cursor:pointer;display:flex;justify-content:space-between;
+}
+.item:hover,.item.active{background:#404040}
+.name{font-size:16px}
+.keywords{font-size:13px;color:#999;margin-left:12px}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <input id="searchInput" class="input-bar" placeholder="Type to search...">
+  <div id="resultList" class="results"></div>
+</div>
 
+<script>
+// ========== Hardcoded links / folders array ==========
+// ========== Updated hardcoded links / folders array ==========
+const items = [
+  {name: "Whiteboard", url: "whiteboard/index.html", keywords: "board draw sketch note canvas"},
+  {name: "PDF To Image", url: "pdf-to-image/index.html", keywords: "pdf convert image png jpg"},
+  {name: "Password Generator", url: "password_generator/index.html", keywords: "pass pwd secret random generator"},
+  {name: "Ollama Local", url: "ollama/index.html", keywords: "llm ai model local ollama chat"}
+];
+
+const input = document.getElementById('searchInput');
+const resultList = document.getElementById('resultList');
+let selectedIndex = 0;
+let filteredList = [];
+
+// Render items
+function render() {
+  const q = input.value.trim().toLowerCase();
+  filteredList = items.filter(x => {
+    const text = `${x.name} ${x.keywords}`.toLowerCase();
+    return text.includes(q);
+  });
+  selectedIndex = 0;
+  resultList.innerHTML = '';
+
+  filteredList.forEach((it, idx) => {
+    const div = document.createElement('div');
+    div.className = 'item' + (idx===selectedIndex ? ' active' : '');
+    div.innerHTML = `<span class="name">${escapeHtml(it.name)}</span><span class="keywords">${escapeHtml(it.keywords)}</span>`;
+    div.onclick = ()=>openItem(it);
+    resultList.appendChild(div);
+  })
+}
+
+function openItem(item) {
+  window.open(item.url, '_blank');
+}
+
+function escapeHtml(str){
+  return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))
+}
+
+// Keyboard
+input.addEventListener('keydown', e=>{
+  if(!filteredList.length) return;
+  switch(e.key){
+    case 'ArrowDown':
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex+1, filteredList.length-1);
+      updateActive();
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex-1, 0);
+      updateActive();
+      break;
+    case 'Enter':
+      e.preventDefault();
+      openItem(filteredList[selectedIndex]);
+      break;
+  }
+})
+function updateActive(){
+  const els = resultList.querySelectorAll('.item');
+  els.forEach((el,i)=>el.className = 'item' + (i===selectedIndex ? ' active' : ''));
+}
+input.addEventListener('input', render);
+render();
+input.focus();
+</script>
+</body>
+</html>
