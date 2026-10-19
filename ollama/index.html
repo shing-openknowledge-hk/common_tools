@@ -275,6 +275,15 @@
                             </label>
                         </div>
                     </div>
+                    <div class="settings-section">
+                        <h3>Chat History</h3>
+                        <p class="settings-help-text">Back up your conversations to a JSON file, or restore them later. Restoring adds chats that are not already in this browser; existing chats are kept.</p>
+                        <div class="chat-history-actions">
+                            <button class="btn btn-secondary" id="backupChatsBtn">Back up to JSON</button>
+                            <button class="btn btn-secondary" id="restoreChatsBtn">Restore from JSON</button>
+                            <input type="file" id="restoreChatsInput" accept=".json,application/json" hidden>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" id="resetSettingsBtn">Reset</button>
