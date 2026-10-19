@@ -96,6 +96,9 @@ const elements = {
     darkMode: document.getElementById('darkMode'),
     resetSettingsBtn: document.getElementById('resetSettingsBtn'),
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+    backupChatsBtn: document.getElementById('backupChatsBtn'),
+    restoreChatsBtn: document.getElementById('restoreChatsBtn'),
+    restoreChatsInput: document.getElementById('restoreChatsInput'),
     
     chatSettingsModal: document.getElementById('chatSettingsModal'),
     closeChatSettingsModal: document.getElementById('closeChatSettingsModal'),
@@ -711,6 +714,84 @@ function loadChat(chatId) {
 
 function saveChats() {
     localStorage.setItem('chats', JSON.stringify(state.chats));
+}
+
+function backupChatHistory() {
+    const backup = {
+        format: 'ollama-ui-chat-history',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        chats: state.chats
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    link.href = downloadUrl;
+    link.download = `ollama-chat-history-${timestamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    showToast(`Backed up ${state.chats.length} chat${state.chats.length === 1 ? '' : 's'} to JSON.`, 'success');
+}
+
+function isValidChatHistoryBackup(backup) {
+    if (!backup || typeof backup !== 'object' || Array.isArray(backup) ||
+        backup.format !== 'ollama-ui-chat-history' || backup.version !== 1 ||
+        !Array.isArray(backup.chats)) {
+        return false;
+    }
+
+    const chatIds = new Set();
+    return backup.chats.every(chat => {
+        if (!chat || typeof chat !== 'object' || Array.isArray(chat) ||
+            typeof chat.id !== 'string' || !chat.id || chatIds.has(chat.id) ||
+            typeof chat.title !== 'string' || !Array.isArray(chat.messages) ||
+            typeof chat.createdAt !== 'string' || typeof chat.updatedAt !== 'string' ||
+            (chat.model !== undefined && typeof chat.model !== 'string') ||
+            (chat.systemPrompt !== undefined && typeof chat.systemPrompt !== 'string')) {
+            return false;
+        }
+
+        chatIds.add(chat.id);
+        return chat.messages.every(message =>
+            message && typeof message === 'object' && !Array.isArray(message) &&
+            typeof message.role === 'string' && typeof message.content === 'string' &&
+            (message.thinking === undefined || message.thinking === null || typeof message.thinking === 'string') &&
+            (message.images === undefined ||
+                (Array.isArray(message.images) && message.images.every(image => typeof image === 'string')))
+        );
+    });
+}
+
+async function restoreChatHistory(file) {
+    try {
+        const backup = JSON.parse(await file.text());
+        if (!isValidChatHistoryBackup(backup)) {
+            showToast('This file is not a valid Ollama UI chat history backup.', 'error');
+            return;
+        }
+
+        const existingIds = new Set(state.chats.map(chat => chat.id));
+        const chatsToAdd = backup.chats.filter(chat => !existingIds.has(chat.id));
+        if (chatsToAdd.length === 0) {
+            showToast(backup.chats.length === 0
+                ? 'This backup does not contain any chats.'
+                : 'All chats in this backup are already in your history.', 'info');
+            return;
+        }
+
+        const mergedChats = [...state.chats, ...chatsToAdd];
+        localStorage.setItem('chats', JSON.stringify(mergedChats));
+        state.chats = mergedChats;
+        updateChatList();
+        showToast(`Restored ${chatsToAdd.length} chat${chatsToAdd.length === 1 ? '' : 's'}. Existing chats were kept.`, 'success');
+    } catch (error) {
+        console.error('Failed to restore chat history:', error);
+        showToast('Could not read or restore this backup. Check that it is valid JSON and there is enough browser storage.', 'error');
+    }
 }
 
 function deleteChat(chatId) {
@@ -1879,6 +1960,13 @@ function initEventListeners() {
     elements.closeSettingsModal.addEventListener('click', hideSettingsModal);
     elements.saveSettingsBtn.addEventListener('click', saveSettings);
     elements.resetSettingsBtn.addEventListener('click', resetSettings);
+    elements.backupChatsBtn.addEventListener('click', backupChatHistory);
+    elements.restoreChatsBtn.addEventListener('click', () => elements.restoreChatsInput.click());
+    elements.restoreChatsInput.addEventListener('change', async (event) => {
+        const [file] = event.target.files;
+        if (file) await restoreChatHistory(file);
+        event.target.value = '';
+    });
     
     // Settings sliders
     elements.temperature.addEventListener('input', (e) => {
