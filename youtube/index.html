@@ -1,0 +1,474 @@
+<html>
+	<head>
+		<title>Youtube</title>
+		<link rel="icon" type="image/x-icon" href="icons/youtube.ico">
+		<link rel="icon" type="image/svg+xml" href="icons/youtube.svg">
+	</head>
+	<style>
+		body{
+			padding:0px;
+			margin:0px;
+			color:white;
+			background:black;
+		}
+		button{
+			background-color: #04AA6D;
+			color: #ffffff;
+			border-color: #04AA6D;
+		}
+		input{
+			
+			background: transparent;
+			color: white;
+			border: none;
+			width: 100%;
+			outline: none;
+		}
+		input:focus{
+			outline: none;
+		}
+		.line
+		{
+			display:flex;
+			top:0px;
+			left:0px;
+			width:100vw;
+			height:20px;
+			z-index:999;
+			position:absolute;
+		}
+		iframe{
+			top:0px;
+			left:0px;
+			position:absolute;
+			width:100vw;
+			height:100vh;
+		}
+	</style>
+	<script src="js/Base64.js"></script>
+	<script src="https://www.youtube.com/iframe_api" defer></script>
+	<div class="line">
+		<input 
+			id="youtubeURL" type="text" value=""
+			onkeypress="youtubePlayer.onKeyPress(event)"
+		>
+		<input 
+			id="youtubeTitle" type="text" value=""
+		>
+		<button onClick="youtubePlayer.process(true)">▶️</button>
+	</div>
+	<div id="player"></div>
+	<script defer>
+		class YoutubePlayer
+		{
+			constructor()
+			{
+				this.initPlayer();
+			}
+			initPlayer()
+			{
+				this.extractURLInfo();
+				// 2. This code loads the IFrame Player API code asynchronously.
+				// var tag = document.createElement('script');
+
+				// tag.src = "https://www.youtube.com/iframe_api";
+				// var firstScriptTag = document.getElementsByTagName('script')[0];
+				// firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+				// var youtubeID = this.getYoutubeID(youtubeURL.value);
+				try
+				{
+					var videoObject = this.getVideoObject(false);
+					
+					
+					
+					this.player = new YT.Player('player', {
+						height: '100vh',
+						width: '100vh',
+						videoId: videoObject ? videoObject.videoId :"",
+						playerVars: {
+							start:videoObject.startSeconds ? videoObject.startSeconds : 0,
+							autoplay:0,
+							enablejsapi:1,
+							playsInline:1,
+							related:0,
+							iv_load_policy:0
+							
+							
+						},
+						events: {
+							'onReady': this.onPlayerReady.bind(this),
+							'onStateChange': this.onPlayerStateChange.bind(this),
+							onError:(event)=>{
+								console.error("onError", event);
+							}
+						}
+					});
+				} catch(err)
+				{
+					console.log("err", err);
+				}
+				
+				// this.run();
+			}
+			safeDecodeURIComponent(str) {
+			  // Handle non-string inputs
+			  if (typeof str !== 'string') {
+				return str;
+			  }
+			  
+			  try {
+				return decodeURIComponent(str); // Try native decoding first
+			  } catch {
+				// Fallback: decode manually using UTF-8
+				const bytes = [];
+				let result = '';
+				let lastIndex = 0;
+				
+				// Use a regex to find all percent-encoded sequences
+				const regex = /%([0-9A-Fa-f]{2})/g;
+				let match;
+				
+				while ((match = regex.exec(str)) !== null) {
+				  // Add any plain text before this match
+				  if (match.index > lastIndex) {
+					result += str.substring(lastIndex, match.index);
+				  }
+				  
+				  // Add the decoded byte
+				  bytes.push(parseInt(match[1], 16));
+				  lastIndex = match.index + 3;
+				  
+				  // If we have a complete UTF-8 sequence or reached the end, decode it
+				  if (bytes.length > 0 && (match.index + 3 >= str.length || !str[match.index + 3].startsWith('%'))) {
+					try {
+					  const decoder = new TextDecoder('utf-8');
+					  result += decoder.decode(new Uint8Array(bytes));
+					  bytes.length = 0; // Reset for next sequence
+					} catch {
+					  // If UTF-8 decoding fails, keep the original percent-encoded sequence
+					  result += str.substring(match.index - (bytes.length - 1) * 3, match.index + 3);
+					  bytes.length = 0;
+					}
+				  }
+				}
+				
+				// Add any remaining plain text after the last match
+				if (lastIndex < str.length) {
+				  result += str.substring(lastIndex);
+				}
+				
+				// Handle any remaining bytes that weren't processed
+				if (bytes.length > 0) {
+				  try {
+					const decoder = new TextDecoder('utf-8');
+					result += decoder.decode(new Uint8Array(bytes));
+				  } catch {
+					// Reconstruct the original percent-encoded sequences for invalid bytes
+					for (let i = 0; i < bytes.length; i++) {
+					  result += '%' + bytes[i].toString(16).padStart(2, '0').toUpperCase();
+					}
+				  }
+				}
+				
+				return result;
+			  }
+			}
+			
+			onApiChange(event)
+			{
+				console.log("player.getOptions()", player.getOptions());
+				console.log("player.getOptions('captions')", player.getOptions('captions'));
+			}
+			
+			 onKeyPress (event)
+			{
+				if(event.key === "Enter" || event.keyCode === 13)
+				{
+					this.process(true);
+				}
+			}
+			
+			extractURLInfo()
+			{
+				var o = new URL(window.location.href);
+				if(o.hash)
+				{
+					var info = this.extract(this.safeDecodeURIComponent(o.hash.substr(1)));
+					youtubeTitle.value = info.title;
+					youtubeURL.value = info.url;
+				}
+			}
+			
+			run()
+			{
+				console.log("run");
+				var o = new URL(window.location.href);
+				if(o.hash)
+				{
+					var info = this.extract(this.safeDecodeURIComponent(o.hash.substr(1)));
+					youtubeTitle.value = info.title;
+					youtubeURL.value = info.url;
+					
+					this.process(false);
+				}
+			}
+			extractURL()
+			{
+				var url = this.player.getVideoUrl();
+				youtubeURL.value = url;
+			}
+			extract(txt)
+			{
+				var pos = txt.lastIndexOf("|");
+				if(pos == -1)
+				{
+					return {
+						title:"",
+						url:txt
+					}
+				} else {
+					return {
+						title:txt.substr(0, pos),
+						url:txt.substr(pos+1)
+					}
+				}
+			}
+			process(changeURL)
+			{
+				
+				// https://www.youtube.com/watch?v=9Z-qH3uISO8
+				// var info = this.extract(youtubeURL.value);
+				var originalYoutubeURL = youtubeURL.value;
+				var title = youtubeTitle.value;
+				var youtubeID = this.getYoutubeID(youtubeURL.value);
+				var obj = {
+					autoplay:0,
+					enablejsapi :1
+				};
+				if(youtubeID)
+				{
+				
+					obj.videoId = youtubeID;
+					
+					/*
+					this.player.loadVideoById({
+						'videoId': 'M7lc1UVf-VE',
+					   'startSeconds': 5,'endSeconds': 60
+					})
+					*/
+					
+					// https://youtu.be/SF5xDMxtd28?t=213
+					var o = new URL(originalYoutubeURL);
+					var newYoutubeURL = `https://www.youtube.com/embed/${youtubeID}`;
+					if(o.searchParams.has("t"))
+					{
+						var time = o.searchParams.get("t");
+						obj.startSeconds = time;
+						// newYoutubeURL += "?start="+time;
+					}
+					if(changeURL)
+					{
+						// window.location.assign(`#${encodeURIComponent(originalYoutubeURL)}`);
+						this.goto(`#${encodeURIComponent(originalYoutubeURL)}`);
+						
+						console.log("loadVideoById", obj);
+						this.player.loadVideoById(obj);
+						
+					}
+					
+					
+					
+					
+					
+				}
+				
+			}
+			getVideoObject(changeURL)
+			{
+				var originalYoutubeURL = youtubeURL.value;
+				var title = youtubeTitle.value;
+				var youtubeID = this.getYoutubeID(youtubeURL.value);
+				if(youtubeID)
+				{
+					var obj = {
+						autoplay:0,
+						enablejsapi :1
+					};
+					obj.videoId = youtubeID;
+					// https://youtu.be/SF5xDMxtd28?t=213
+					var o = new URL(originalYoutubeURL);
+					var newYoutubeURL = `https://www.youtube.com/embed/${youtubeID}`;
+					if(o.searchParams.has("t"))
+					{
+						var time = o.searchParams.get("t");
+						obj.startSeconds = time;
+						// newYoutubeURL += "?start="+time;
+					}
+					if(changeURL)
+					{
+						// window.location.assign(`#${encodeURIComponent(originalYoutubeURL)}`);
+						this.goto(`#${encodeURIComponent(originalYoutubeURL)}`);
+					}
+					// console.log("loadVideoById", obj);
+					return obj;
+				}
+				return null;
+			}
+			goto(url)
+			{
+				window.location.replace(url);
+				// window.location.assign(url);
+			}
+			onPlayerStateChange(event)
+			{
+				var videoData = this.player.getVideoData();
+				var title = videoData  && videoData.title ? videoData.title :"Youtube";
+				youtubeTitle.value = document.title = title;
+				this.extractURL();
+				// window.location.assign(`#${title}|${encodeURIComponent(youtubeURL.value)}`);
+				this.goto(`#${title}|${encodeURIComponent(youtubeURL.value)}`);
+				// videoData.title
+				// {video_id: 'eltN82lqsp0', author: '沙雕轻漫', title: '[MULTI SUB]【全民逃荒，我的物品能升级】穿越全民逃荒世界。 开局被队友抛弃送死。 不慌外挂！ 【已经损坏的手枪LV1】升级【可以发射子弹的手枪LV2】 直接痛击队友！#沙雕轻漫 #SDQM', isPlayable: true, errorCode: null, …}
+			
+				// console.log("player state change", this.player.getOptions('captions'));
+				// ;
+				
+				/*
+				debugger;
+				player.loadVideoById({'videoId': 'M7lc1UVf-VE',
+				   'startSeconds': 5,
+				   
+				   'endSeconds': 60})
+				*/
+			}
+			onPlayerReady(event)
+			{
+				console.log("ready");
+				// event.target.g.setAttribute("allow", "");
+				// event.target.g.setAttribute("referrerpolicy", "");
+				
+				// event.target.mute();
+				// console.log("onPlayerReady", this.player.getOptions('captions'));
+				/*
+				this.player.loadVideoById({
+					'videoId': 'M7lc1UVf-VE',
+				   'startSeconds': 5,'endSeconds': 60
+				})
+				*/
+				// 
+				
+				this.run();
+				   
+				// this.player.pauseVideo();
+				// this.player.stopVideo();
+				/*
+				setTimeout(()=>{
+					this.player.pauseVideo();
+					this.player.stopVideo();
+				}, 100);
+				*/
+				// if auto play
+				//  event.target.playVideo();
+			
+				if (this.player.getPlayerState() === YT.PlayerState.PLAYING) {
+					this.player.pauseVideo();
+				}
+			}
+			
+			processDataTransferItemList(itemList)
+			{
+				var items = this.itemListToArray(itemList);
+				items = items.filter((item)=>{
+					return item.kind == "string" && (item.type == "text/uri-list" || item.type == "text/plain");
+				});
+				if(items.length == 0) return;
+				
+				var firstItem = items[0];
+				firstItem.getAsString((s)=>{
+					// console.log(kind, type, s);
+					debugger;
+					youtubeURL.value = s;
+					this.process(false);
+				});
+				
+			}
+			
+			itemListToArray(itemList)
+			{
+				var array = [];
+				for(var i = 0;i <itemList.length;i++)
+				{
+					var item = itemList[i];
+					array.push(item);
+				}
+				return array;
+			}
+			getYoutubeID(url, opts) {
+				if (opts == undefined) {
+				  opts = {fuzzy: true};
+				}
+
+				if (/youtu\.?be/.test(url)) {
+
+				  // Look first for known patterns
+				  var i;
+				  var patterns = [
+					/youtu\.be\/([^#\&\?]{11})/,  // youtu.be/<id>
+					/\?v=([^#\&\?]{11})/,         // ?v=<id>
+					/\&v=([^#\&\?]{11})/,         // &v=<id>
+					/embed\/([^#\&\?]{11})/,      // embed/<id>
+					/\/v\/([^#\&\?]{11})/         // /v/<id>
+				  ];
+
+				  // If any pattern matches, return the ID
+				  for (i = 0; i < patterns.length; ++i) {
+					if (patterns[i].test(url)) {
+					  return patterns[i].exec(url)[1];
+					}
+				  }
+
+				  if (opts.fuzzy) {
+					// If that fails, break it apart by certain characters and look 
+					// for the 11 character key
+					var tokens = url.split(/[\/\&\?=#\.\s]/g);
+					for (i = 0; i < tokens.length; ++i) {
+					  if (/^[^#\&\?]{11}$/.test(tokens[i])) {
+						return tokens[i];
+					  }
+					}
+				  }
+				}
+
+				return null;
+			  }
+		}
+		
+		
+		var youtubePlayer;
+		
+		
+		function onYouTubeIframeAPIReady()
+		{		
+				youtubePlayer = new YoutubePlayer();
+				// youtubePlayer.run();
+				
+				document.body.addEventListener("dragover", (event) => {
+					  // prevent default to allow drop
+					  event.preventDefault();
+				});
+				document.body.addEventListener("drop", (event)=>{
+					event.preventDefault();
+					youtubePlayer.processDataTransferItemList(event.dataTransfer.items);
+					
+				});
+		}
+			
+
+    </script>
+	<!-- 
+	https://www.youtube.com/embed
+	<iframe width="420" height="315"
+	src="https://www.youtube.com/embed/tgbNymZ7vqY?autoplay=1&mute=1">
+	</iframe>
+	-->
+</html>
